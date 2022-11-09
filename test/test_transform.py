@@ -23,11 +23,11 @@ normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
 transform = [
         transforms.Resize(256),
         transforms.CenterCrop(224),
-        #transforms.ToTensor(),
+        transforms.ToTensor(),
         normalize,
     ]
 
-@pytest.mark.parametrize("transform", (transforms.Compose(transform), nn.Sequential(*transform)))
+@pytest.mark.parametrize("transform", (transforms.Compose(transform), transforms.Compose(transform))) #nn.Sequential(*transform)))
 def test_transform(transform):
     core = Core()
     model = core.read_model(model="/home/alex/work/experimental/mobilenetv2_food101/mobilenetv2_food101/mobilenet_v2_food101.onnx")
