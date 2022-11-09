@@ -10,47 +10,36 @@ import torchvision.models as models
 
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
-from sklearn.metrics import accuracy_score
+
+from openvino.runtime import Core
+import openvino.runtime as ov
+
+from tv2ov.converter import PreprocessorConvertor
+
+MODEL_LOCAL_PATH="mobilenet_v2.onnx"
+OUTPUT_MODEL="mobilenet_v2_preprocess.xml"
+
+def prepare_model():
+    model = models.mobilenet_v2(pretrained=True)  
+    dummy_input = torch.randn(1, 3, 224, 224)
+    input_names = ["input"] 
+    output_names = ["output1"]
+    torch.onnx.export(model, dummy_input, MODEL_LOCAL_PATH, verbose=True, input_names=input_names, output_names=output_names)
 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                     std=[0.229, 0.224, 0.225])
 transform = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
-        #transforms.ToTensor(),
+        transforms.ToTensor(),
         normalize,
     ])
 
+model = prepare_model()
+core = Core()
+model = core.read_model(model=MODEL_LOCAL_PATH)
 
-#print(transform)
+convertor = PreprocessorConvertor(model)
+model = convertor.from_torchvision(0, transform, [1,3,-1,-1])   
 
-#transform_ts = torch.jit.script(transform)
-#transform_ts = torch.jit.trace(transform(), torch.rand(1, 3, 224, 224))
-#print(transform_ts.graph)
-
-
-class TorchTransformWrapper(nn.Module):
-    def __init__(self, transform):
-        super().__init__()
-        self.transform = torch.nn.Sequential(*transform)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            x = self.transform(x)
-            return x
-
-def script_transform(transform):
-    if isinstance(transform, transforms.Compose):
-        print("YALA")
-        transform = torch.nn.Sequential(*transform.transforms)
-    return torch.jit.script(transform)
-
-#transform_ts = script_transform(transform)
-#print(transform_ts)
-
-
-from transform_utils import PreprocessorConvertor
-
-convertor = PreprocessorConvertor()
-
-convertor.from_torchvision(transform)
+ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
