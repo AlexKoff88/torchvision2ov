@@ -35,7 +35,7 @@ def test_transform(transform):
 
     convertor = PreprocessorConvertor(model)
 
-    model = convertor.from_torchvision(0, transform)
+    model = convertor.from_torchvision(0, transform, [1,3,-1,-1])
 
     ov.serialize(model, dst_path, dst_path.replace(".xml", ".bin"))
 
