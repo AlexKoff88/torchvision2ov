@@ -49,18 +49,20 @@ model = convertor.from_torchvision(0, transform, [1,3,-1,-1])
 ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
 
 ## Test inference
-test_input = np.random.randint(255, size=(1, 3, 480, 640), dtype=np.uint8)
-'''dataset = datasets.FakeData(size=10, 
-                    image_size=(3,480,640), 
-                    num_classes=1000) 
+test_input = np.random.randint(255, size=(480, 640, 3), dtype=np.uint8)
 
-data_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=1, num_workers=1, shuffle=False)'''
-test_image = Image.fromarray(test_input)
+test_image = Image.fromarray(test_input.astype('uint8'), 'RGB')
 transformed_input = transform(test_image)
+transformed_input = torch.unsqueeze(transformed_input, dim=0)
 
-torch_result = torch_model(transformed_input).numpy()
-ov_result = model(test_input)
+with torch.no_grad():
+    torch_result = torch_model(transformed_input).numpy()
+
+ov_input = np.transpose(test_input, (2, 0, 1))
+ov_input = np.expand_dims(ov_input, axis=0)
+compiled_model = core.compile_model(model, "CPU")
+ov_result = compiled_model(ov_input)
+print(ov_result)
 
 result = np.max(np.absolute(torch_result - ov_result))
 print(f"Max abs diff: {result}")
