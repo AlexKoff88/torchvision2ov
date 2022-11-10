@@ -27,11 +27,34 @@ def get_onnx_model(model):
     output_names = ["output1"]
     torch.onnx.export(model, dummy_input, MODEL_LOCAL_PATH, verbose=True, input_names=input_names, output_names=output_names)
 
+def test_pipellines(torch_model, ov_model, transform):
+    ## Test inference
+    test_input = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
+
+    ## Torch results
+    torch_input = copy.deepcopy(test_input)
+    test_image = Image.fromarray(torch_input.astype('uint8'), 'RGB')
+    transformed_input = transform(test_image)
+    transformed_input = torch.unsqueeze(transformed_input, dim=0)
+    with torch.no_grad():
+        torch_result = torch_model(transformed_input).numpy()
+
+    ## OpenVINO results
+    ov_input = test_input
+    ov_input = np.expand_dims(ov_input, axis=0)
+    compiled_model = core.compile_model(model, "CPU")
+    output = compiled_model.output(0)
+    ov_result = compiled_model(ov_input)[output]
+
+    result = np.max(np.absolute(torch_result - ov_result))
+    return result
+
+
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                     std=[0.229, 0.224, 0.225])
 transform = transforms.Compose([
-        #transforms.Resize(256),
-        #transforms.CenterCrop(224),
+        transforms.Resize(256, interpolation=transforms.InterpolationMode.NEAREST),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         normalize,
     ])
@@ -49,26 +72,5 @@ model = convertor.from_torchvision(0, transform)
 
 ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
 
-## Test inference
-test_input = np.random.randint(255, size=(224, 224, 3), dtype=np.uint8)
-'''test_input = np.random.randint(1, size=(3, 224, 224), dtype=np.uint8)
-test_input = test_input.astype(float)'''
-
-torch_input = copy.deepcopy(test_input)
-
-test_image = Image.fromarray(torch_input.astype('uint8'), 'RGB')
-#test_image = torch.from_numpy(torch_input)
-transformed_input = transform(test_image)
-transformed_input = torch.unsqueeze(transformed_input, dim=0)
-
-with torch.no_grad():
-    torch_result = torch_model(transformed_input).numpy()
-
-ov_input = test_input
-ov_input = np.expand_dims(ov_input, axis=0)
-compiled_model = core.compile_model(model, "CPU")
-output = compiled_model.output(0)
-ov_result = compiled_model(ov_input)[output]
-
-result = np.max(np.absolute(torch_result - ov_result))
+result = test_pipellines(torch_model, model, transform)
 print(f"Max abs diff: {result}")
