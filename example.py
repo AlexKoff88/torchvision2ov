@@ -1,7 +1,3 @@
-from lib2to3.pytree import convert
-import sys
-import os
-
 import numpy as np
 from PIL import Image
 import copy
@@ -27,7 +23,7 @@ def get_onnx_model(model):
     output_names = ["output1"]
     torch.onnx.export(model, dummy_input, MODEL_LOCAL_PATH, verbose=True, input_names=input_names, output_names=output_names)
 
-def test_pipellines(torch_model, ov_model, transform):
+def test_pipelines(torch_model, ov_model, transform):
     ## Test inference
     test_input = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
 
@@ -42,7 +38,7 @@ def test_pipellines(torch_model, ov_model, transform):
     ## OpenVINO results
     ov_input = test_input
     ov_input = np.expand_dims(ov_input, axis=0)
-    compiled_model = core.compile_model(model, "CPU")
+    compiled_model = core.compile_model(ov_model, "CPU")
     output = compiled_model.output(0)
     ov_result = compiled_model(ov_input)[output]
 
@@ -72,5 +68,5 @@ model = convertor.from_torchvision(0, transform)
 
 ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
 
-result = test_pipellines(torch_model, model, transform)
+result = test_pipelines(torch_model, model, transform)
 print(f"Max abs diff: {result}")
