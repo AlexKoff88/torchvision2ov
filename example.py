@@ -31,7 +31,7 @@ normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
 transform = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
-        transforms.ToTensor(),
+        #transforms.ToTensor(),
         normalize,
     ])
 
@@ -44,25 +44,26 @@ model = core.read_model(model=MODEL_LOCAL_PATH)
 
 ## Embed preprocessing into OV model
 convertor = PreprocessorConvertor(model)
-model = convertor.from_torchvision(0, transform, [1,3,-1,-1])
+model = convertor.from_torchvision(0, transform)
 
 ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
 
 ## Test inference
 test_input = np.random.randint(255, size=(480, 640, 3), dtype=np.uint8)
 
-test_image = Image.fromarray(test_input.astype('uint8'), 'RGB')
+'''test_image = Image.fromarray(test_input.astype('uint8'), 'RGB')
 transformed_input = transform(test_image)
 transformed_input = torch.unsqueeze(transformed_input, dim=0)
 
 with torch.no_grad():
-    torch_result = torch_model(transformed_input).numpy()
+    torch_result = torch_model(transformed_input).numpy()'''
 
-ov_input = np.transpose(test_input, (2, 0, 1))
+ov_input = test_input
+ov_input = np.transpose(ov_input, (2, 0, 1))
 ov_input = np.expand_dims(ov_input, axis=0)
 compiled_model = core.compile_model(model, "CPU")
-ov_result = compiled_model(ov_input)
-print(ov_result)
+output = compiled_model.output(0)
+ov_result = compiled_model(ov_input)[output]
 
-result = np.max(np.absolute(torch_result - ov_result))
-print(f"Max abs diff: {result}")
+#result = np.max(np.absolute(torch_result - ov_result))
+#print(f"Max abs diff: {result}")
