@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 from PIL import Image
+import copy
 
 import torch
 import torch.nn as nn
@@ -29,8 +30,8 @@ def get_onnx_model(model):
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                     std=[0.229, 0.224, 0.225])
 transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
+        #transforms.Resize(256),
+        #transforms.CenterCrop(224),
         #transforms.ToTensor(),
         normalize,
     ])
@@ -49,21 +50,27 @@ model = convertor.from_torchvision(0, transform)
 ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
 
 ## Test inference
-test_input = np.random.randint(255, size=(480, 640, 3), dtype=np.uint8)
+#test_input = np.random.randint(255, size=(224, 224, 3), dtype=np.uint8)
+'''test_input = np.random.randint(1, size=(3, 224, 224), dtype=np.uint8)
+test_input = test_input.astype(float)
 
-'''test_image = Image.fromarray(test_input.astype('uint8'), 'RGB')
+torch_input = copy.deepcopy(test_input)'''
+test_image = torch.randn(1, 3, 224, 224)
+test_input = copy.deepcopy(test_image.numpy())
+
+#test_image = Image.fromarray(torch_input.astype('uint8'), 'RGB')
+#test_image = torch.from_numpy(torch_input)
 transformed_input = transform(test_image)
-transformed_input = torch.unsqueeze(transformed_input, dim=0)
+#transformed_input = torch.unsqueeze(transformed_input, dim=0)
 
 with torch.no_grad():
-    torch_result = torch_model(transformed_input).numpy()'''
+    torch_result = torch_model(transformed_input).numpy()
 
 ov_input = test_input
-ov_input = np.transpose(ov_input, (2, 0, 1))
-ov_input = np.expand_dims(ov_input, axis=0)
+#ov_input = np.expand_dims(ov_input, axis=0)
 compiled_model = core.compile_model(model, "CPU")
 output = compiled_model.output(0)
 ov_result = compiled_model(ov_input)[output]
 
-#result = np.max(np.absolute(torch_result - ov_result))
-#print(f"Max abs diff: {result}")
+result = np.max(np.absolute(torch_result - ov_result))
+print(f"Max abs diff: {result}")
