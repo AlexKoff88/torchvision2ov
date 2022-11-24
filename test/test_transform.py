@@ -63,7 +63,7 @@ def test_transform():
 
     ## Embed preprocessing into OV model
     convertor = PreprocessorConvertor(model)
-    model = convertor.from_torchvision(0, transform)
+    model = convertor.from_torchvision(transform, "input")
 
     ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
     compiled_model = core.compile_model(model, "CPU")

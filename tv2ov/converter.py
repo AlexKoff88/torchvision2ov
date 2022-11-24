@@ -187,7 +187,7 @@ class NormalizeConverter(TransformConverterBase):
 
 class PreprocessorConvertor():
     def __init__(self, model: ov.Model):
-        self.model = model
+        self._model = model
 
     @staticmethod
     def to_list(transform) -> List:
@@ -198,15 +198,18 @@ class PreprocessorConvertor():
         else:
             raise TypeError(f"Unsupported transform type: {type(transform)}")
 
-    def from_torchvision(self, input_idx: int, transform, input_shape:list=None) -> ov.Model:
+    def from_torchvision(self, transform, input_name: str, input_shape:list=None) -> ov.Model:
         transform_list = PreprocessorConvertor.to_list(transform)
+        input_idx = next((i for i, p in enumerate(self._model.get_parameters()) if p.get_friendly_name() == input_name), None)
+        if input_idx is None:
+            raise ValueError(f"Input with name {input_name} is not found")
 
-        ppp = PrePostProcessor(self.model)
+        ppp = PrePostProcessor(self._model)
         ppp.input(input_idx).tensor().set_layout(Layout('NCHW')) 
-        input_shape = input_shape = list(self.model.input(input_idx).shape) if \
+        input_shape = input_shape = list(self._model.input(input_idx).shape) if \
                         input_shape == None else input_shape
 
-        input_shape = list(self.model.input(input_idx).get_shape())
+        input_shape = list(self._model.input(input_idx).get_shape())
         results = []
         global_meta = {"input_shape": input_shape}
         global_meta["layout"] = Layout('NCHW')
@@ -218,7 +221,3 @@ class PreprocessorConvertor():
 
         updated_model = ppp.build()
         return updated_model
-
-
-
-    
