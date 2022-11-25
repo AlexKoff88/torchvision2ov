@@ -12,7 +12,7 @@ import torchvision.transforms as transforms
 from openvino.runtime import Core
 import openvino.runtime as ov
 
-from tv2ov import PreprocessorConvertor
+from tv2ov import PreprocessConvertor
 
 MODEL_LOCAL_PATH="mobilenet_v2.onnx"
 OUTPUT_MODEL="mobilenet_v2_preprocess.xml"
@@ -62,7 +62,7 @@ def test_transform():
     ## Embed preprocessing into OV model
     test_input = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
 
-    model = PreprocessorConvertor.from_torchvision(
+    model = PreprocessConvertor.from_torchvision(
         model=model, 
         input_name="input",
         transform=transform,

@@ -4,7 +4,7 @@ import numpy as np
 
 import openvino.runtime as ov
 
-class PreprocessorConvertor():
+class PreprocessConvertor():
     def __init__(self, model: ov.Model):
         self._model = model
 

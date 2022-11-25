@@ -1,5 +1,5 @@
-from .preprocess_converter import PreprocessorConvertor
+from .preprocess_converter import PreprocessConvertor
 
 __all__ = [
-    "PreprocessorConvertor",
+    "PreprocessConvertor",
 ]

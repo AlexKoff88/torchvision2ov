@@ -10,7 +10,7 @@ python setup.py install
 - Embed Torchvision preprocessing into the model
 ```python
 from tv2ov import PreprocessConverter
-model = PreprocessorConvertor.from_torchvision(
+model = PreprocessConverter.from_torchvision(
     model=model, 
     input_name="input",
     transform=transform,
