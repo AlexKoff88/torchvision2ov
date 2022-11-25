@@ -1,11 +1,13 @@
 from typing import List
 from abc import ABCMeta, abstractmethod
-from typing import Callable
+from typing import Callable, Any
 from enum import Enum
 import numbers
 from collections.abc import Sequence
 import logging
 import copy
+import numpy as np
+from PIL import Image
 
 import torch
 import torchvision.transforms as transforms
@@ -29,14 +31,14 @@ def _setup_size(size, error_msg):
 
     if len(size) != 2:
         raise ValueError(error_msg)
-
+    
     return size
 
 def _change_layout_shape(input_shape):
     new_shape = copy.deepcopy(input_shape)
-    new_shape[-1] = input_shape[-3]
-    new_shape[-3] = input_shape[-2]
-    new_shape[-2] = input_shape[-1]
+    new_shape[1] = input_shape[3]
+    new_shape[2] = input_shape[1]
+    new_shape[3] = input_shape[2]
     return new_shape
 
 
@@ -96,9 +98,11 @@ class NormalizeConverter(TransformConverterBase):
         ppp.input(input_idx).tensor() \
         .set_element_type(Type.u8) \
         .set_layout(Layout('NHWC')) \
-        .set_color_format(ColorFormat.RGB) \
-        .set_shape(new_shape)
+        .set_color_format(ColorFormat.RGB)
 
+        print(f"input_shape: {input_shape}, new_shape: {new_shape}")
+
+        
         ppp.input(input_idx).preprocess().convert_layout(Layout('NCHW'))
         #ppp.input(input_idx).preprocess().convert_color(ColorFormat.BGR)
         ppp.input(input_idx).preprocess().convert_element_type(Type.f32)
@@ -131,23 +135,28 @@ class NormalizeConverter(TransformConverterBase):
         if "shape" not in meta:
             logging.warning('Shape is not defined')
             return Status.FAILED, None
+
+        input_shape = meta["input_shape"]
+        layout = meta["layout"]
         
         source_size= meta["shape"]
         target_size = _setup_size(transform.size, "Incorrect size type for CenterCrop operation")        
         bl, tr = self._compute_corners(source_size, target_size)
-        input_shape = meta["input_shape"]
-        bl = [0]*len(input_shape[:-2]) + bl
-        tr = input_shape[:-2] + tr
+        
+        bl = [0]*len(input_shape[:-2]) + bl if layout == Layout("NCHW") else [0] + bl + [0]
+        tr = input_shape[:-2] + tr if layout == Layout("NCHW") else input_shape[:1] + tr + input_shape[-1:]
+
+        print(f"CenterCrop: {bl} {tr}")
+        print(f"CenterCrop: {input_shape}, layout: {meta['layout']}")
 
         # Change corners layout in case of ToTensor (NHWC)
-        if meta["has_totensor"] and meta["layout"] == Layout("NCHW"):
+        '''if meta["has_totensor"] and layout == Layout("NHWC"):
+            print("Change layout")
             bl = _change_layout_shape(bl)
-            tr = _change_layout_shape(tr)
+            tr = _change_layout_shape(tr)'''
 
         ppp.input(input_idx).preprocess().crop(bl, tr)
-
         meta["shape"] = (target_size[-2],target_size[-1])
-
         return Status.SUCCEEDED, meta
 
 @TransformConverterFactory.register(transforms.Resize)
@@ -171,12 +180,14 @@ class NormalizeConverter(TransformConverterBase):
         layout = meta["layout"] 
         input_shape = meta["input_shape"]
 
-        if layout == Layout('NHWC'):
+        if layout == Layout("NHWC"):
             input_shape[1] = -1
             input_shape[2] = -1
         else:
             input_shape[2] = -1
             input_shape[3] = -1
+
+        print(f"Resize: {input_shape}, layout: {layout}")
 
         ppp.input(input_idx).tensor().set_shape(input_shape)
         ppp.input(input_idx).preprocess().resize(NormalizeConverter.RESIZE_MODE_MAP[mode], h, w)
@@ -185,12 +196,7 @@ class NormalizeConverter(TransformConverterBase):
 
         return Status.SUCCEEDED, meta
 
-class PreprocessorConvertor():
-    def __init__(self, model: ov.Model):
-        self._model = model
-
-    @staticmethod
-    def to_list(transform) -> List:
+def _to_list(transform) -> List:
         if isinstance(transform, torch.nn.Sequential):
             return [t for t in transform]
         elif isinstance(transform, transforms.Compose):
@@ -198,21 +204,45 @@ class PreprocessorConvertor():
         else:
             raise TypeError(f"Unsupported transform type: {type(transform)}")
 
-    def from_torchvision(self, transform, input_name: str, input_shape:list=None) -> ov.Model:
-        transform_list = PreprocessorConvertor.to_list(transform)
-        input_idx = next((i for i, p in enumerate(self._model.get_parameters()) if p.get_friendly_name() == input_name), None)
+def _get_shape_layout_from_data(input_example):
+    """
+    Disregards rank of shape and return 
+    """
+    shape = None
+    layout = None
+    if isinstance(input_example, torch.Tensor): # PyTorch
+        shape = list(input_example.shape)
+        layout = Layout("NCHW")
+    elif isinstance(input_example, np.ndarray): # OpenCV, numpy
+        shape = list(input_example.shape)
+        layout = Layout("NHWC")
+    elif isinstance(input_example, Image.Image): # PILLOW
+        shape = list(np.array(input_example).shape)
+        layout = Layout("NHWC")
+    else:
+        raise TypeError(f"Unsupported input type: {type(input_example)}")
+
+    if len(shape) == 3:
+        shape = [1] + shape
+
+    print(f"Shape: {shape}, layout: {layout}")
+    return shape, layout
+
+def from_torchvision(model: ov.Model, input_name: str, transform: Callable, input_example: Any) -> ov.Model:
+        transform_list = _to_list(transform)
+        input_idx = next((i for i, p in enumerate(model.get_parameters()) if p.get_friendly_name() == input_name), None)
         if input_idx is None:
             raise ValueError(f"Input with name {input_name} is not found")
 
-        ppp = PrePostProcessor(self._model)
-        ppp.input(input_idx).tensor().set_layout(Layout('NCHW')) 
-        input_shape = input_shape = list(self._model.input(input_idx).shape) if \
-                        input_shape == None else input_shape
+        input_shape, layout = _get_shape_layout_from_data(input_example)
 
-        input_shape = list(self._model.input(input_idx).get_shape())
+        ppp = PrePostProcessor(model)
+        ppp.input(input_idx).tensor().set_layout(layout) 
+        ppp.input(input_idx).tensor().set_shape(input_shape)
+
         results = []
         global_meta = {"input_shape": input_shape}
-        global_meta["layout"] = Layout('NCHW')
+        global_meta["layout"] = layout
         global_meta["has_totensor"] = any(isinstance(item, transforms.ToTensor) for item in transform_list)
 
         for t in transform_list:

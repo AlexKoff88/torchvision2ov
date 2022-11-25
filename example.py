@@ -12,7 +12,7 @@ import torchvision.transforms as transforms
 from openvino.runtime import Core
 import openvino.runtime as ov
 
-from tv2ov.converter import PreprocessorConvertor
+from tv2ov import PreprocessorConvertor
 
 MODEL_LOCAL_PATH="mobilenet_v2.onnx"
 OUTPUT_MODEL="mobilenet_v2_preprocess.xml"
@@ -21,12 +21,10 @@ def get_onnx_model(model):
     dummy_input = torch.randn(1, 3, 224, 224)
     input_names = ["input"] 
     output_names = ["output1"]
-    torch.onnx.export(model, dummy_input, MODEL_LOCAL_PATH, verbose=True, input_names=input_names, output_names=output_names)
+    torch.onnx.export(model, dummy_input, MODEL_LOCAL_PATH, verbose=False, input_names=input_names, output_names=output_names)
 
-def test_pipelines(torch_model, ov_model, transform):
+def verify_pipelines(torch_model, compiled_model, transform, test_input):
     ## Test inference
-    test_input = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
-
     ## Torch results
     torch_input = copy.deepcopy(test_input)
     test_image = Image.fromarray(torch_input.astype('uint8'), 'RGB')
@@ -38,7 +36,6 @@ def test_pipelines(torch_model, ov_model, transform):
     ## OpenVINO results
     ov_input = test_input
     ov_input = np.expand_dims(ov_input, axis=0)
-    compiled_model = core.compile_model(ov_model, "CPU")
     output = compiled_model.output(0)
     ov_result = compiled_model(ov_input)[output]
 
@@ -63,10 +60,18 @@ core = Core()
 model = core.read_model(model=MODEL_LOCAL_PATH)
 
 ## Embed preprocessing into OV model
-convertor = PreprocessorConvertor(model)
-model = convertor.from_torchvision(0, transform)
+test_input = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
+
+model = PreprocessorConvertor.from_torchvision(
+    model=model, 
+    input_name="input",
+    transform=transform,
+    input_example=Image.fromarray(test_input.astype('uint8'), 'RGB'))
 
 ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
+compiled_model = core.compile_model(model, "CPU")
 
-result = test_pipelines(torch_model, model, transform)
+result = verify_pipelines(torch_model, compiled_model, transform, test_input)
 print(f"Max abs diff: {result}")
+
+
