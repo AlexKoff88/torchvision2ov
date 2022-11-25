@@ -93,23 +93,22 @@ class NormalizeConverter(TransformConverterBase):
 class NormalizeConverter(TransformConverterBase):
     def convert(self, input_idx: int, ppp: PrePostProcessor, transform, meta=None) -> Status:
         input_shape = meta["input_shape"]
-        new_shape = _change_layout_shape(input_shape)
+        layout = meta["layout"]
 
         ppp.input(input_idx).tensor() \
         .set_element_type(Type.u8) \
         .set_layout(Layout('NHWC')) \
         .set_color_format(ColorFormat.RGB)
 
-        print(f"input_shape: {input_shape}, new_shape: {new_shape}")
-
-        
-        ppp.input(input_idx).preprocess().convert_layout(Layout('NCHW'))
-        #ppp.input(input_idx).preprocess().convert_color(ColorFormat.BGR)
+        if layout == Layout("NHWC"):
+            input_shape = _change_layout_shape(input_shape)
+            layout = Layout("NCHW")
+            ppp.input(input_idx).preprocess().convert_layout(layout)
         ppp.input(input_idx).preprocess().convert_element_type(Type.f32)
         ppp.input(input_idx).preprocess().scale(255.0)
 
-        meta["input_shape"] = new_shape
-
+        meta["input_shape"] = input_shape
+        meta["layout"] = layout
         return Status.SUCCEEDED, meta
 
 @TransformConverterFactory.register(transforms.CenterCrop)
