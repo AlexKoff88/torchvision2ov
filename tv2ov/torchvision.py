@@ -145,15 +145,6 @@ class NormalizeConverter(TransformConverterBase):
         bl = [0]*len(input_shape[:-2]) + bl if layout == Layout("NCHW") else [0] + bl + [0]
         tr = input_shape[:-2] + tr if layout == Layout("NCHW") else input_shape[:1] + tr + input_shape[-1:]
 
-        print(f"CenterCrop: {bl} {tr}")
-        print(f"CenterCrop: {input_shape}, layout: {meta['layout']}")
-
-        # Change corners layout in case of ToTensor (NHWC)
-        '''if meta["has_totensor"] and layout == Layout("NHWC"):
-            print("Change layout")
-            bl = _change_layout_shape(bl)
-            tr = _change_layout_shape(tr)'''
-
         ppp.input(input_idx).preprocess().crop(bl, tr)
         meta["shape"] = (target_size[-2],target_size[-1])
         return Status.SUCCEEDED, meta
@@ -185,8 +176,6 @@ class NormalizeConverter(TransformConverterBase):
         else:
             input_shape[2] = -1
             input_shape[3] = -1
-
-        print(f"Resize: {input_shape}, layout: {layout}")
 
         ppp.input(input_idx).tensor().set_shape(input_shape)
         ppp.input(input_idx).preprocess().resize(NormalizeConverter.RESIZE_MODE_MAP[mode], h, w)
@@ -224,7 +213,6 @@ def _get_shape_layout_from_data(input_example):
     if len(shape) == 3:
         shape = [1] + shape
 
-    print(f"Shape: {shape}, layout: {layout}")
     return shape, layout
 
 def from_torchvision(model: ov.Model, input_name: str, transform: Callable, input_example: Any) -> ov.Model:
