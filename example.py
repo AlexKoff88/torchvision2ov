@@ -37,7 +37,7 @@ def test_pipelines(torch_model, ov_model, transform):
 
     ## OpenVINO results
     ov_input = test_input
-    ov_input = np.expand_dims(ov_input, axis=0)
+    ov_input = np.expand_dims(ov_input, axis=0) # Adding batch dimension
     compiled_model = core.compile_model(ov_model, "CPU")
     output = compiled_model.output(0)
     ov_result = compiled_model(ov_input)[output]
@@ -70,3 +70,5 @@ ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
 
 result = test_pipelines(torch_model, model, transform)
 print(f"Max abs diff: {result}")
+
+
