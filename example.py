@@ -64,7 +64,6 @@ test_input = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
 
 model = PreprocessConvertor.from_torchvision(
     model=model, 
-    input_name="input",
     transform=transform,
     input_example=Image.fromarray(test_input.astype('uint8'), 'RGB'))
 

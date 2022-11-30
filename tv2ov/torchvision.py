@@ -215,9 +215,19 @@ def _get_shape_layout_from_data(input_example):
 
     return shape, layout
 
-def from_torchvision(model: ov.Model, input_name: str, transform: Callable, input_example: Any) -> ov.Model:
+def from_torchvision(model: ov.Model, transform: Callable, input_example: Any, 
+                    input_name: str = None) -> ov.Model:
         transform_list = _to_list(transform)
-        input_idx = next((i for i, p in enumerate(model.get_parameters()) if p.get_friendly_name() == input_name), None)
+
+        if input_name is not None:
+            input_idx = next((i for i, p in enumerate(model.get_parameters()) if p.get_friendly_name() == input_name), None)
+        else:
+            if len(model.get_parameters()) == 1:
+                input_idx = 0
+            else:
+                raise ValueError("Model contains multiple inputs. Please specify the name of the"
+                                "input to which prepocessing is added.")
+
         if input_idx is None:
             raise ValueError(f"Input with name {input_name} is not found")
 
