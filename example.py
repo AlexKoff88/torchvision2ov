@@ -68,7 +68,7 @@ model = PreprocessConvertor.from_torchvision(
     transform=transform,
     input_example=Image.fromarray(test_input.astype('uint8'), 'RGB'))
 
-ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
+ov.serialize(model, OUTPUT_MODEL)
 compiled_model = core.compile_model(model, "CPU")
 
 result = verify_pipelines(torch_model, compiled_model, transform, test_input)
