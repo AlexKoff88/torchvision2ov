@@ -64,9 +64,9 @@ def test_transform():
 
     model = PreprocessConvertor.from_torchvision(
         model=model, 
-        input_name="input",
         transform=transform,
-        input_example=Image.fromarray(test_input.astype('uint8'), 'RGB'))
+        input_example=Image.fromarray(test_input.astype('uint8'), 'RGB'),
+        input_name="input")
 
     ov.serialize(model, OUTPUT_MODEL, OUTPUT_MODEL.replace(".xml", ".bin"))
     compiled_model = core.compile_model(model, "CPU")
